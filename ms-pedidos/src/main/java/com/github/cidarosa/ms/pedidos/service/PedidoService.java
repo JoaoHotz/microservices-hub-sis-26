@@ -5,6 +5,7 @@ import com.github.cidarosa.ms.pedidos.dto.PedidoDto;
 import com.github.cidarosa.ms.pedidos.entities.ItemDoPedido;
 import com.github.cidarosa.ms.pedidos.entities.Pedido;
 import com.github.cidarosa.ms.pedidos.entities.Status;
+import com.github.cidarosa.ms.pedidos.exceptions.PedidoPagoException;
 import com.github.cidarosa.ms.pedidos.exceptions.ResourceNotFoundException;
 import com.github.cidarosa.ms.pedidos.repositories.ItemDoPedidoRepository;
 import com.github.cidarosa.ms.pedidos.repositories.PedidoRepository;
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class PedidoService {
@@ -58,10 +60,15 @@ public class PedidoService {
 
         try {
             Pedido pedido = pedidoRepository.getReferenceById(id);
+            if (pedido.getStatus().equals(Status.PAGO)){
+                throw new PedidoPagoException(
+                        String.format("Pedido id: %d já esta pago  e não pode ser alterado", id)
+                );
+            }
             pedido.getItens().clear();
             pedido.setData(LocalDate.now());
             pedido.setStatus(Status.CRIADO);
-            mapDtoToPedido(pedidoDto, pedido);
+//          mapDtoToPedido(pedidoDto, pedido);
             pedido.calcularValorTotalDoPedido();
             pedido = pedidoRepository.save(pedido);
             return new PedidoDto(pedido);
@@ -77,6 +84,19 @@ public class PedidoService {
         }
 
         pedidoRepository.deleteById(id);
+    }
+
+    @Transactional
+    public void confirmarPagamento(Long id){
+        Optional<Pedido> pedido = pedidoRepository.findById(id);
+
+        if (pedido.isEmpty()){
+            throw new ResourceNotFoundException("Pedido não encontrado ID: " + id);
+        }
+
+        pedido.get().setStatus(Status.PAGO);
+        pedidoRepository.save(pedido.get());
+
     }
 
     private void mapDtoToPedido(PedidoDto pedidoDto, Pedido pedido) {
